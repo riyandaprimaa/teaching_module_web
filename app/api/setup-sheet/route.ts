@@ -1,31 +1,29 @@
 import { NextResponse } from 'next/server'
-import { createSpreadsheet, shareSpreadsheetWithTeacher } from '@/lib/sheets'
+import { getSheetsClient } from '@/lib/sheets'
 import fs from 'fs'
 import path from 'path'
 
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}))
-    const { teacherEmail, existingSpreadsheetId, forceCreate } = body
+    const { existingSpreadsheetId } = body
 
-    let spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID
-
-    // Jika user menginput ID Spreadsheet yang sudah ada
-    if (existingSpreadsheetId) {
-      spreadsheetId = existingSpreadsheetId.trim()
-    } else if (!spreadsheetId || forceCreate) {
-      // Buat baru jika belum ada atau dipaksa buat baru
-      spreadsheetId = await createSpreadsheet(teacherEmail)
-    } else {
-      // Jika sudah ada, pastikan email guru punya akses
-      if (teacherEmail) {
-        await shareSpreadsheetWithTeacher(spreadsheetId, teacherEmail)
-      }
+    if (!existingSpreadsheetId) {
+      return NextResponse.json(
+        { error: 'ID Spreadsheet wajib diisi' },
+        { status: 400 }
+      )
     }
 
-    // Update .env.local secara otomatis
+    const spreadsheetId = existingSpreadsheetId.trim()
+
+    // Verifikasi apakah spreadsheet bisa diakses oleh bot
+    const sheets = getSheetsClient()
+    const meta = await sheets.spreadsheets.get({ spreadsheetId })
+
+    // Update .env.local
     const envPath = path.join(process.cwd(), '.env.local')
-    if (fs.existsSync(envPath) && spreadsheetId) {
+    if (fs.existsSync(envPath)) {
       let envContent = fs.readFileSync(envPath, 'utf8')
       if (envContent.includes('GOOGLE_SHEETS_SPREADSHEET_ID=')) {
         envContent = envContent.replace(
@@ -43,12 +41,13 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       spreadsheetId,
+      title: meta.data.properties?.title || 'Spreadsheet',
       url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
     })
   } catch (error: any) {
-    console.error('Error handling spreadsheet setup:', error)
+    console.error('Error connecting spreadsheet:', error)
     return NextResponse.json(
-      { error: error.message || 'Gagal memproses spreadsheet' },
+      { error: error.message || 'Gagal memverifikasi spreadsheet. Pastikan bot sudah di-share akses editor!' },
       { status: 500 }
     )
   }
