@@ -226,27 +226,27 @@ export default function NilaiPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-600">Jenis:</span>
+          <span className="text-xs font-semibold text-slate-700">Jenis:</span>
           <select
             value={selectedJenis}
             onChange={(e) => setSelectedJenis(e.target.value as JenisPenilaian)}
-            className="border border-slate-300 rounded-lg text-xs px-2.5 py-1.5 bg-slate-50 font-medium"
+            className="border border-slate-300 rounded-lg text-xs px-3 py-2 bg-white text-slate-900 font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="UH">Ulangan Harian (UH)</option>
-            <option value="Tugas">Tugas</option>
-            <option value="UTS">UTS</option>
-            <option value="UAS">UAS</option>
+            <option value="UH" className="text-slate-900 font-semibold bg-white">Ulangan Harian (UH)</option>
+            <option value="Tugas" className="text-slate-900 font-semibold bg-white">Tugas</option>
+            <option value="UTS" className="text-slate-900 font-semibold bg-white">UTS</option>
+            <option value="UAS" className="text-slate-900 font-semibold bg-white">UAS</option>
           </select>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-600">Materi/KD:</span>
+          <span className="text-xs font-semibold text-slate-700">Materi/KD:</span>
           <input
             type="text"
             value={selectedMateri}
             onChange={(e) => setSelectedMateri(e.target.value)}
             placeholder="Contoh: Bilangan Bulat"
-            className="border border-slate-300 rounded-lg text-xs px-2.5 py-1.5 bg-slate-50 font-medium"
+            className="border border-slate-300 rounded-lg text-xs px-3 py-2 bg-white text-slate-900 placeholder:text-slate-500 font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>

@@ -102,24 +102,24 @@ export default function JurnalGuruPage() {
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-slate-600 font-semibold mb-1">Tanggal</label>
+                <label className="block text-slate-700 font-semibold mb-1">Tanggal</label>
                 <input
                   type="date"
                   value={tanggal}
                   onChange={(e) => setTanggal(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2 bg-slate-50 font-medium"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-900 font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-600 font-semibold mb-1">Kelas</label>
+                <label className="block text-slate-700 font-semibold mb-1">Kelas</label>
                 <select
                   value={kelas}
                   onChange={(e) => setKelas(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2 bg-slate-50 font-medium"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-900 font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                   {KELAS_LIST.map((k) => (
-                    <option key={k} value={k}>
+                    <option key={k} value={k} className="text-slate-900 bg-white font-semibold">
                       Kelas {k}
                     </option>
                   ))}
@@ -128,35 +128,35 @@ export default function JurnalGuruPage() {
             </div>
 
             <div>
-              <label className="block text-slate-600 font-semibold mb-1">Materi / Topik Pembahasan</label>
+              <label className="block text-slate-700 font-semibold mb-1">Materi / Topik Pembahasan</label>
               <input
                 type="text"
                 placeholder="Misal: Operasi Perkalian Bentuk Aljabar"
                 value={topik}
                 onChange={(e) => setTopik(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg p-2 bg-slate-50"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-900 placeholder:text-slate-500 font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
 
             <div>
-              <label className="block text-slate-600 font-semibold mb-1">Aktivitas & Catatan Kelas</label>
+              <label className="block text-slate-700 font-semibold mb-1">Aktivitas & Catatan Kelas</label>
               <textarea
                 rows={3}
                 placeholder="Rangkuman kegiatan kelas, antusiasme siswa, atau soal yang dibahas..."
                 value={isi}
                 onChange={(e) => setIsi(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg p-2 bg-slate-50"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-900 placeholder:text-slate-500 font-normal shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
 
             <div>
-              <label className="block text-slate-600 font-semibold mb-1">Refleksi & Rencana Tindak Lanjut</label>
+              <label className="block text-slate-700 font-semibold mb-1">Refleksi & Rencana Tindak Lanjut</label>
               <textarea
                 rows={2}
                 placeholder="Kendala siswa, siswa yang butuh bimbingan ekstra, dsb..."
                 value={refleksi}
                 onChange={(e) => setRefleksi(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg p-2 bg-slate-50"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-900 placeholder:text-slate-500 font-normal shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
 

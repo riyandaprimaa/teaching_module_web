@@ -227,13 +227,13 @@ export default function KehadiranPage() {
 
         {/* Pemilih Tanggal */}
         <div className="flex items-center gap-2 ml-auto">
-          <Calendar className="w-4 h-4 text-slate-400" />
-          <span className="text-xs font-semibold text-slate-600">Tanggal:</span>
+          <Calendar className="w-4 h-4 text-slate-600" />
+          <span className="text-xs font-semibold text-slate-700">Tanggal:</span>
           <input
             type="date"
             value={selectedTanggal}
             onChange={(e) => setSelectedTanggal(e.target.value)}
-            className="border border-slate-300 rounded-lg text-xs px-2.5 py-1.5 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-teal-500 font-medium"
+            className="border border-slate-300 rounded-lg text-xs px-3 py-2 bg-white text-slate-900 font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
         </div>
       </div>
