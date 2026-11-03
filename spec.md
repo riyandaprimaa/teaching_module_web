@@ -6,26 +6,27 @@
 
 ## Status Proyek
 
-| Item | Status |
-|---|---|
-| PRD | ✅ Selesai |
-| context.md | ✅ Selesai |
-| spec.md | ✅ Selesai |
-| GitHub Repo | ✅ Terhubung (remote: origin) |
-| Next.js Init | ⏳ Belum dimulai |
-| Firebase Setup | ⏳ Belum dimulai |
-| Google Sheets API Setup | ⏳ Belum dimulai |
-| Fitur Kehadiran | ⏳ Belum dimulai |
-| Fitur Nilai | ⏳ Belum dimulai |
-| Jurnal Guru | ⏳ Belum dimulai |
-| Buku Materi | ⏳ Belum dimulai |
-| Deploy Vercel | ⏳ Belum dimulai |
+| Item                    | Status                                                   |
+| ----------------------- | -------------------------------------------------------- |
+| PRD                     | ✅ Selesai                                                |
+| context.md              | ✅ Selesai                                                |
+| spec.md                 | ✅ Selesai                                                |
+| GitHub Repo             | ✅ Terhubung (remote: origin)                             |
+| Next.js Init            | ✅ Selesai (App Router, Tailwind, TypeScript)             |
+| Firebase Setup          | ✅ Config + Firestore + Google Auth terpasang             |
+| Google Sheets API Setup | ✅ Service Account + Auto Sync API terpasang             |
+| Fitur Kehadiran         | ✅ Realtime Firestore + Sync Sheets + Cetak Rekap PDF     |
+| Fitur Nilai             | ✅ Realtime + KKM 70 + Export PDF Nilai                  |
+| Jurnal Guru             | ✅ CRUD Refleksi Mengajar Firestore                      |
+| Buku Materi             | ✅ Modul Kelas 7, 8, 9 (Rumus + Pembahasan + Bank Soal)  |
+| Deploy Vercel           | ⏳ Siap deploy                                            |
 
 ---
 
 ## Changelog
 
 ### [2026-11-03] — Sesi 1: Perencanaan & Setup Awal
+
 - Dibuat PRD lengkap (`PRD_WebModulMatematikaSMP.md`)
 - Dibuat `context.md` dan `spec.md`
 - GitHub repo terhubung: `https://github.com/riyandaprimaa/teaching_module_web.git`
@@ -39,6 +40,7 @@
 ## Spesifikasi Teknis Detail
 
 ### Firebase Firestore Rules (Rencana)
+
 ```
 rules_version = '2';
 service cloud.firestore {
@@ -105,12 +107,14 @@ service cloud.firestore {
 ```
 
 ### KKM (Kriteria Ketuntasan Minimal)
+
 - Default KKM: **70**
 - Nilai < 70 → warna merah (belum tuntas)
 - Nilai ≥ 70 → warna hijau (tuntas)
 - KKM bisa diubah di settings admin
 
 ### Batasan & Catatan Teknis
+
 - Google Sheets API: max 300 request/menit → implementasi write debounce 2 detik
 - Firebase Firestore free tier: 50K reads/day, 20K writes/day, 20K deletes/day
 - Estimasi usage harian: ~500 reads, ~200 writes (aman di free tier)
@@ -136,10 +140,10 @@ service cloud.firestore {
 
 ---
 
-## Pertanyaan Terbuka
+## Keputusan Final (Dikunci)
 
-- [ ] Distribusi siswa per kelas (asumsi sementara ±30-32/kelas)
-- [ ] Nama sekolah untuk ditampilkan di header website
-- [ ] Apakah perlu fitur cetak/print rekapitulasi kehadiran?
-- [ ] Format nama kelas: "7A" / "Kelas 7A" / "VII-A"?
-- [ ] Tahun ajaran yang ditampilkan?
+- [x] Distribusi siswa per kelas: asumsi ±30-32/kelas (tidak perlu dikonfirmasi)
+- [x] Nama sekolah: **tidak ditampilkan**, pakai header umum
+- [x] Fitur cetak/print rekap kehadiran: **YA**, perlu export PDF untuk print
+- [x] Format nama kelas: **7A, 7B, 8A, 8B, 9A**
+- [x] Tahun ajaran: **2026/2027**
