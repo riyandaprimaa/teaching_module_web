@@ -1,12 +1,24 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import { collection, onSnapshot, query, where, writeBatch, doc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/contexts/AuthContext'
-import { Siswa, Kehadiran, KELAS_LIST, TAHUN_AJARAN } from '@/types'
-import { Users, CalendarCheck, BarChart2, BookOpenCheck, ArrowRight, ShieldCheck, ExternalLink, Link as LinkIcon, RefreshCw } from 'lucide-react'
+import { Siswa, Kehadiran, KELAS_LIST, KelasId, TAHUN_AJARAN } from '@/types'
+import { Users, CalendarCheck, BarChart2, BookOpenCheck, ArrowRight, ShieldCheck, ExternalLink, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
+
+const NAMA_DEPAN = [
+  'Ahmad', 'Aditya', 'Aisyah', 'Anisa', 'Bagas', 'Bayu', 'Bunga', 'Citra',
+  'Dimas', 'Dina', 'Eko', 'Fajar', 'Farhan', 'Gita', 'Hafiz', 'Indah',
+  'Irfan', 'Joko', 'Kurnia', 'Lestari', 'Maulana', 'Nabila', 'Putra', 'Putri',
+  'Rafi', 'Rani', 'Rian', 'Rizky', 'Siti', 'Tri', 'Wahyu', 'Zahra'
+]
+
+const NAMA_BELAKANG = [
+  'Pratama', 'Saputra', 'Wijaya', 'Kusuma', 'Santoso', 'Ramadhan', 'Hidayat',
+  'Permana', 'Nugroho', 'Wibowo', 'Setiawan', 'Siregar', 'Lubis', 'Purnomo'
+]
 
 export default function DashboardOverviewPage() {
   const { user } = useAuth()
@@ -23,7 +35,7 @@ export default function DashboardOverviewPage() {
     const qSiswa = collection(db, 'siswa')
     const unsubSiswa = onSnapshot(qSiswa, (snap) => {
       setTotalSiswa(snap.size)
-    })
+    }, (err) => console.error('Error snapshot siswa:', err))
 
     // 2. Listen kehadiran hari ini
     const today = new Date().toISOString().split('T')[0]
@@ -35,13 +47,13 @@ export default function DashboardOverviewPage() {
         if (data.status === 'hadir') hadirCount++
       })
       setKehadiranHariIni({ total: snap.size, hadir: hadirCount })
-    })
+    }, (err) => console.error('Error snapshot kehadiran:', err))
 
     // 3. Listen jurnal
     const qJurnal = collection(db, 'jurnal')
     const unsubJurnal = onSnapshot(qJurnal, (snap) => {
       setTotalJurnal(snap.size)
-    })
+    }, (err) => console.error('Error snapshot jurnal:', err))
 
     return () => {
       unsubSiswa()
@@ -78,20 +90,55 @@ export default function DashboardOverviewPage() {
     }
   }
 
-  // Seed sample siswa dummy
+  // Seed sample siswa dummy langsung dari browser user yang sudah login!
   const handleSeedSiswa = async () => {
+    if (!user) {
+      setInitMessage('Silakan login terlebih dahulu untuk menambah data.')
+      return
+    }
+
     setIsInitializing(true)
-    setInitMessage('Sedang menambahkan data awal siswa dummy (156 siswa)...')
+    setInitMessage('Sedang membuat 156 siswa dengan akun guru Anda...')
+
     try {
-      const res = await fetch('/api/seed-siswa', { method: 'POST' })
-      const data = await res.json()
-      if (res.ok) {
-        setInitMessage(data.message)
-      } else {
-        setInitMessage(`Gagal: ${data.error}`)
+      const batch = writeBatch(db)
+      const siswaRef = collection(db, 'siswa')
+
+      const pembagian: Record<KelasId, number> = {
+        '7A': 31,
+        '7B': 31,
+        '8A': 31,
+        '8B': 31,
+        '9A': 32,
       }
-    } catch (err: any) {
-      setInitMessage(`Error: ${err.message}`)
+
+      let nisCounter = 26001
+
+      KELAS_LIST.forEach((kelas) => {
+        const count = pembagian[kelas]
+        for (let i = 1; i <= count; i++) {
+          const docRef = doc(siswaRef)
+          const depan = NAMA_DEPAN[Math.floor(Math.random() * NAMA_DEPAN.length)]
+          const belakang = NAMA_BELAKANG[Math.floor(Math.random() * NAMA_BELAKANG.length)]
+          const nama = `${depan} ${belakang}`
+
+          batch.set(docRef, {
+            id: docRef.id,
+            nis: nisCounter.toString(),
+            nama: nama,
+            kelas: kelas,
+            createdAt: new Date().toISOString(),
+          })
+
+          nisCounter++
+        }
+      })
+
+      await batch.commit()
+      setInitMessage('Berhasil membuat 156 siswa di 5 kelas (7A, 7B, 8A, 8B, 9A)!')
+    } catch (error: any) {
+      console.error('Error seeding siswa:', error)
+      setInitMessage(`Gagal: ${error.message}`)
     } finally {
       setIsInitializing(false)
     }
@@ -139,7 +186,7 @@ export default function DashboardOverviewPage() {
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
             <div className="font-semibold text-slate-700">1. Buat Spreadsheet Otomatis</div>
             <p className="text-slate-500 leading-relaxed">
-              Sistem akan membuat Spreadsheet baru dengan sheet Siswa, Kehadiran, & Nilai, serta membagikan akses edit langsung ke email Google Anda.
+              Sistem akan membuat Spreadsheet baru dengan sheet Siswa, Kehadiran, & Nilai, serta membagikan akses edit langsung ke email Google Anda ({user?.email || 'email login'}).
             </p>
             <button
               onClick={() => handleSetupGoogleSheet(false)}
