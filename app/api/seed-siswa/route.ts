@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/firebase'
-import { collection, writeBatch, doc } from 'firebase/firestore'
+import { adminDb } from '@/lib/firebase-admin'
 import { KELAS_LIST, KelasId } from '@/types'
 
-// Nama-nama siswa SMP umum Indonesia untuk sample 156 siswa
 const NAMA_DEPAN = [
   'Ahmad', 'Aditya', 'Aisyah', 'Anisa', 'Bagas', 'Bayu', 'Bunga', 'Citra',
   'Dimas', 'Dina', 'Eko', 'Fajar', 'Farhan', 'Gita', 'Hafiz', 'Indah',
@@ -18,10 +16,9 @@ const NAMA_BELAKANG = [
 
 export async function POST() {
   try {
-    const batch = writeBatch(db)
-    const siswaRef = collection(db, 'siswa')
+    const batch = adminDb.batch()
+    const siswaRef = adminDb.collection('siswa')
 
-    // Distribusi 156 siswa di 5 kelas (31, 31, 31, 31, 32)
     const pembagian: Record<KelasId, number> = {
       '7A': 31,
       '7B': 31,
@@ -35,7 +32,7 @@ export async function POST() {
     KELAS_LIST.forEach((kelas) => {
       const count = pembagian[kelas]
       for (let i = 1; i <= count; i++) {
-        const docRef = doc(siswaRef)
+        const docRef = siswaRef.doc()
         const depan = NAMA_DEPAN[Math.floor(Math.random() * NAMA_DEPAN.length)]
         const belakang = NAMA_BELAKANG[Math.floor(Math.random() * NAMA_BELAKANG.length)]
         const nama = `${depan} ${belakang}`
@@ -66,4 +63,3 @@ export async function POST() {
     )
   }
 }
-
