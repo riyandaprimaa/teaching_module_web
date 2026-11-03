@@ -33,9 +33,28 @@ export function getDriveClient() {
 }
 
 /**
+ * Bagikan akses spreadsheet secara otomatis ke email Gmail guru
+ */
+export async function shareSpreadsheetWithTeacher(spreadsheetId: string, email: string) {
+  try {
+    const drive = getDriveClient()
+    await drive.permissions.create({
+      fileId: spreadsheetId,
+      requestBody: {
+        role: 'writer',
+        type: 'user',
+        emailAddress: email,
+      },
+    })
+  } catch (err: any) {
+    console.error('Gagal sharing akses ke email guru:', err.message)
+  }
+}
+
+/**
  * Buat spreadsheet baru untuk proyek ini
  */
-export async function createSpreadsheet(): Promise<string> {
+export async function createSpreadsheet(teacherEmail?: string): Promise<string> {
   const sheets = getSheetsClient()
 
   const response = await sheets.spreadsheets.create({
@@ -61,7 +80,7 @@ export async function createSpreadsheet(): Promise<string> {
       data: [
         {
           range: 'Siswa!A1:D1',
-          values: [['NIS', 'Nama', 'Kelas', 'Tanggal Daftar']],
+          values: [['NIS', 'Nama', 'Kelas', 'Tanggal Terdaftar']],
         },
         {
           range: 'Kehadiran!A1:F1',
@@ -75,11 +94,16 @@ export async function createSpreadsheet(): Promise<string> {
     },
   })
 
+  // Jika ada email guru yang login, bagikan akses langsung
+  if (teacherEmail) {
+    await shareSpreadsheetWithTeacher(spreadsheetId, teacherEmail)
+  }
+
   return spreadsheetId
 }
 
 /**
- * Tambah atau update baris kehadiran di Sheets
+ * Tambah baris kehadiran ke Sheets
  */
 export async function upsertKehadiranToSheets(data: {
   nis: string
@@ -132,4 +156,3 @@ export async function appendNilaiToSheets(data: {
     },
   })
 }
-

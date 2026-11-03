@@ -8,6 +8,7 @@ import {
   BarChart2,
   BookOpenCheck,
   BookMarked,
+  Users,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react'
@@ -20,6 +21,11 @@ const navItems = [
     label: 'Beranda',
     icon: LayoutDashboard,
     exact: true,
+  },
+  {
+    href: '/dashboard/siswa',
+    label: 'Data Siswa',
+    icon: Users,
   },
   {
     href: '/dashboard/kehadiran',
@@ -132,4 +138,3 @@ export function Sidebar() {
     </aside>
   )
 }
-
