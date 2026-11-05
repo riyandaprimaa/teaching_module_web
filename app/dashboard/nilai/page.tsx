@@ -310,6 +310,7 @@ export default function NilaiPage() {
   const arrNilai = Object.values(draftNilai)
   const rataRata = arrNilai.length ? Math.round(arrNilai.reduce((a, b) => a + b, 0) / arrNilai.length) : 0
   const jumlahTuntas = arrNilai.filter((n) => n >= KKM).length
+  const jumlahRemidi = arrNilai.filter((n) => n < KKM).length
 
   // Generate Ekspor PDF Nilai
   const handleGeneratePdfReport = async () => {
@@ -444,7 +445,7 @@ export default function NilaiPage() {
       </div>
 
       {/* Bar Statistik Nilai & Kartu Nilai Tertinggi / Terendah */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Rata-Rata Kelas */}
         <div className="bg-white dark:bg-[#27272a] p-4 rounded-2xl border-2 border-pink-300 dark:border-[1px] dark:border-slate-700 flex items-center justify-between shadow-xs">
           <div>
@@ -472,6 +473,20 @@ export default function NilaiPage() {
           </div>
           <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 rounded-xl flex items-center justify-center font-bold">
             ✓
+          </div>
+        </div>
+
+        {/* Siswa Remidi */}
+        <div className="bg-white dark:bg-[#27272a] p-4 rounded-2xl border-2 border-pink-300 dark:border-[1px] dark:border-slate-700 flex items-center justify-between shadow-xs">
+          <div>
+            <div className="text-[11px] font-bold text-red-500 uppercase">Perlu Remidi</div>
+            <div className="text-2xl font-black text-red-500 mt-0.5">{jumlahRemidi} Siswa</div>
+            <div className="text-[11px] text-red-600 dark:text-red-400 font-bold mt-0.5">
+              Nilai &lt; {KKM}
+            </div>
+          </div>
+          <div className="w-10 h-10 bg-red-50 dark:bg-red-950/40 text-red-500 rounded-xl flex items-center justify-center font-bold text-base">
+            ✗
           </div>
         </div>
 

@@ -8,7 +8,11 @@ const KehadiranRowSchema = z.object({
   nama: z.string().trim().max(128),
   kelas: z.string().trim().min(1).max(8),
   tanggal: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'tanggal harus format YYYY-MM-DD'),
-  status: z.enum(['hadir', 'izin', 'sakit', 'alfa']),
+  // Terima baik lowercase ('hadir') maupun capitalized ('Hadir') untuk toleransi
+  status: z
+    .string()
+    .transform((v) => v.toLowerCase())
+    .pipe(z.enum(['hadir', 'izin', 'sakit', 'alfa'])),
 })
 
 const BodySchema = z.object({

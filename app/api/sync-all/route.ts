@@ -34,14 +34,39 @@ export async function POST(req: Request) {
       )
     }
 
+    // Baca seluruh siswa untuk enrich data NIS jika di kehadiran/nilai belum tersimpan NIS
+    const siswaSnap = await adminDb.collection('siswa').get()
+    const siswaMap = new Map<string, { nis: string; nama: string; kelas: string }>()
+    const siswaByName = new Map<string, { nis: string; nama: string; kelas: string }>()
+
+    siswaSnap.docs.forEach((doc) => {
+      const s = doc.data() as Record<string, unknown>
+      const info = {
+        nis: String(s.nis ?? ''),
+        nama: String(s.nama ?? ''),
+        kelas: String(s.kelas ?? ''),
+      }
+      siswaMap.set(doc.id, info)
+      if (info.nama) {
+        siswaByName.set(`${info.kelas}_${info.nama.toLowerCase()}`, info)
+      }
+    })
+
     // Baca seluruh kehadiran
     const kehadiranSnap = await adminDb.collection('kehadiran').get()
     const kehadiranRows = kehadiranSnap.docs.map((d) => {
       const k = d.data() as Record<string, unknown>
+      const sById = k.siswaId ? siswaMap.get(String(k.siswaId)) : undefined
+      const sByName =
+        !sById && k.namaSiswa
+          ? siswaByName.get(`${String(k.kelas ?? '')}_${String(k.namaSiswa).toLowerCase()}`)
+          : undefined
+      const siswa = sById || sByName
+
       return {
-        nis: String(k.nis ?? ''),
-        nama: String(k.namaSiswa ?? ''),
-        kelas: String(k.kelas ?? ''),
+        nis: String(k.nis || siswa?.nis || ''),
+        nama: String(k.namaSiswa || siswa?.nama || ''),
+        kelas: String(k.kelas || siswa?.kelas || ''),
         tanggal: String(k.tanggal ?? ''),
         status: String(k.status ?? ''),
       }
@@ -52,10 +77,17 @@ export async function POST(req: Request) {
     const nilaiRows = nilaiSnap.docs
       .map((d) => {
         const n = d.data() as Record<string, unknown>
+        const sById = n.siswaId ? siswaMap.get(String(n.siswaId)) : undefined
+        const sByName =
+          !sById && n.namaSiswa
+            ? siswaByName.get(`${String(n.kelas ?? '')}_${String(n.namaSiswa).toLowerCase()}`)
+            : undefined
+        const siswa = sById || sByName
+
         return {
-          nis: String(n.nis ?? ''),
-          nama: String(n.namaSiswa ?? ''),
-          kelas: String(n.kelas ?? ''),
+          nis: String(n.nis || siswa?.nis || ''),
+          nama: String(n.namaSiswa || siswa?.nama || ''),
+          kelas: String(n.kelas || siswa?.kelas || ''),
           jenis: String(n.jenis ?? ''),
           materi: String(n.materi ?? ''),
           nilai: Number(n.nilai ?? 0),

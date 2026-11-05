@@ -102,16 +102,30 @@ type TabSchema = {
 const KEHADIRAN_SCHEMA: TabSchema = {
   tab: 'Kehadiran',
   headers: ['NIS', 'Nama', 'Kelas', 'Tanggal', 'Status', 'Timestamp'],
-  // kolom 0 = NIS, kolom 3 = Tanggal
-  keyOf: (cols) => [cols[0], cols[3]].map((c) => (c || '').trim()).join('|'),
+  // Kunci unik: Kelas + Tanggal + Siswa (NIS jika terisi, atau Nama case-insensitive sebagai fallback)
+  keyOf: (cols) => {
+    const nis = (cols[0] || '').trim()
+    const nama = (cols[1] || '').trim().toLowerCase()
+    const kelas = (cols[2] || '').trim().toUpperCase()
+    const tanggal = (cols[3] || '').trim()
+    const studentId = nis || `nama:${nama}`
+    return `${kelas}|${tanggal}|${studentId}`
+  },
 }
 
 const NILAI_SCHEMA: TabSchema = {
   tab: 'Nilai',
   headers: ['NIS', 'Nama', 'Kelas', 'Jenis', 'Materi/KD', 'Nilai', 'Tanggal'],
-  // kolom 0 = NIS, 2 = Kelas, 3 = Jenis, 4 = Materi
-  keyOf: (cols) =>
-    [cols[0], cols[2], cols[3], cols[4]].map((c) => (c || '').trim()).join('|'),
+  // Kunci unik: Kelas + Jenis + Materi + Siswa (NIS jika terisi, atau Nama case-insensitive sebagai fallback)
+  keyOf: (cols) => {
+    const nis = (cols[0] || '').trim()
+    const nama = (cols[1] || '').trim().toLowerCase()
+    const kelas = (cols[2] || '').trim().toUpperCase()
+    const jenis = (cols[3] || '').trim().toUpperCase()
+    const materi = (cols[4] || '').trim().toLowerCase()
+    const studentId = nis || `nama:${nama}`
+    return `${kelas}|${jenis}|${materi}|${studentId}`
+  },
 }
 
 interface KehadiranRow {
@@ -196,9 +210,11 @@ export async function upsertKehadiranToSheets(
     const timestamp = new Date().toLocaleString('id-ID')
     for (const item of data) {
       if (!item.nis && !item.nama) continue
+      const statusLabel =
+        item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase()
       dedupe(
         KEHADIRAN_SCHEMA.keyOf([item.nis, item.nama, item.kelas, item.tanggal]),
-        [item.nis, item.nama, item.kelas, item.tanggal, item.status, timestamp]
+        [item.nis, item.nama, item.kelas, item.tanggal, statusLabel, timestamp]
       )
     }
   })

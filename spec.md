@@ -25,6 +25,26 @@
 
 ## Changelog
 
+### [2026-11-05] — Sesi 6: Fix Sinkronisasi Google Sheets (Kehadiran & Nilai Anti-Duplikat) & Card Siswa Remidi
+
+- **Fix Sinkronisasi Google Sheets (Kehadiran & Nilai Lengkap Semua Siswa)**:
+  - Mengatasi bug hanya 1 siswa yang tercatat di Google Sheets saat melakukan simpan kehadiran atau refresh spreadsheet.
+  - **Akar Penyebab**:
+    1. Kunci deduplikasi `KEHADIRAN_SCHEMA.keyOf` lama hanya berbasis `[NIS, Tanggal]`, sedangkan dokumen kehadiran di Firestore belum menyimpan field `nis`. Akibatnya seluruh siswa menghasilkan kunci identik (`|2026-11-05`), saling menimpa dalam Map deduplikasi, dan orphan cleaner menghapus baris lainnya.
+    2. Validasi status presensi sempat case-sensitive terhadap huruf kapital.
+  - **Perbaikan Kunci Unik & Mekanisme Sinkronisasi**:
+    - `KEHADIRAN_SCHEMA.keyOf`: Menggunakan format `${kelas}|${tanggal}|${studentId}` di mana `studentId` memprioritaskan `nis` (jika ada) atau `nama` siswa (case-insensitive) sebagai fallback. Menjamin seluruh siswa di semua kelas tercatat utuh dan perubahan kehadiran diperbarui in-place tanpa duplikat.
+    - `NILAI_SCHEMA.keyOf`: Menggunakan format `${kelas}|${jenis}|${materi}|${studentId}` dengan prinsip yang sama, menjaga rekap nilai semua siswa tetap rapi dan konsisten.
+    - `app/dashboard/kehadiran/page.tsx`: Menyimpan field `nis: siswa.nis || ''` secara permanen ke koleksi Firestore `kehadiran`.
+    - `/api/sync-all`: Mengambil data koleksi `siswa` terlebih dahulu untuk melakukan *auto-enrichment* NIS bagi data historis kehadiran dan nilai sebelum dikirim ke Google Sheets.
+    - Format status presensi di Google Sheets kini rapi dengan huruf kapital awal (`Hadir`, `Izin`, `Sakit`, `Alfa`).
+- **Penambahan Card "Perlu Remidi" di Menu Nilai**:
+  - Menambahkan kalkulasi `jumlahRemidi = arrNilai.filter((n) => n < KKM).length`.
+  - Menampilkan kartu baru "Perlu Remidi" beraksen merah (`text-red-500`, badge `✗`, indikator `Nilai < 75`) di bar statistik halaman Nilai, dengan layout grid 5 kolom responsif di desktop.
+- **Verifikasi Kualitas**:
+  - `npx tsc --noEmit`: 0 error.
+  - `next build`: Sukses penuh (15 halaman ter-generate tanpa peringatan).
+
 ### [2026-11-05] — Sesi 5: Fix Modul Buku Firestore, Soft Dark Pink, Branding Jurnal Guru Premium & Marquee Sambutan
 
 - **Fix Firestore Subcollection Path Buku Modul**:

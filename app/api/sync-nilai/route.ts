@@ -9,7 +9,7 @@ const NilaiRowSchema = z.object({
   kelas: z.string().trim().min(1).max(8),
   jenis: z.enum(['UH', 'UTS', 'UAS', 'Tugas']),
   materi: z.string().trim().min(1).max(128),
-  nilai: z.number().int().min(0).max(100),
+  nilai: z.number().min(0).max(100),
   tanggal: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'tanggal harus format YYYY-MM-DD'),
 })
 

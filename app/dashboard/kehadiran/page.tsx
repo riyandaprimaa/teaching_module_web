@@ -138,6 +138,7 @@ export default function KehadiranPage() {
             id: docId,
             siswaId: siswa.id,
             namaSiswa: siswa.nama,
+            nis: siswa.nis || '',
             kelas: selectedKelas,
             tanggal: selectedTanggal,
             status: status,
@@ -145,11 +146,11 @@ export default function KehadiranPage() {
           })
 
           rowsToSync.push({
-            nis: siswa.nis,
+            nis: siswa.nis || '',
             nama: siswa.nama,
             kelas: selectedKelas,
             tanggal: selectedTanggal,
-            status: getStatusLabel(status),
+            status: status, // kirim lowercase enum langsung (hadir/izin/sakit/alfa)
           })
         }
       }
