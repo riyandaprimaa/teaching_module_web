@@ -27,6 +27,9 @@
 
 ### [2026-11-05] — Sesi 6: Fix Sinkronisasi Google Sheets (Kehadiran & Nilai Anti-Duplikat) & Card Siswa Remidi
 
+- **Fix Ekspor PDF Kehadiran (`The query requires an index`)**:
+  - Mengatasi error saat mencetak Rekap Presensi PDF pada rentang tanggal: Firestore memerlukan composite index ketika menggabungkan filter array `where('kelas', 'in', ...)` dengan operator perbandingan rentang `where('tanggal', '>=', ...)`.
+  - Solusi: Menyelaraskan implementasi dengan halaman Nilai — query Firestore hanya memfilter `where('kelas', 'in', targetKelas)` (single-field index bawaan tanpa perlu setup composite index di Google Cloud Console), lalu filter rentang tanggal dilakukan langsung di memori klien sebelum menyusun tabel PDF.
 - **Fix Sinkronisasi Google Sheets (Kehadiran & Nilai Lengkap Semua Siswa)**:
   - Mengatasi bug hanya 1 siswa yang tercatat di Google Sheets saat melakukan simpan kehadiran atau refresh spreadsheet.
   - **Akar Penyebab**:

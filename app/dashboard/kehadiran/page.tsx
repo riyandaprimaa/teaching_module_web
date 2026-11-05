@@ -256,27 +256,27 @@ export default function KehadiranPage() {
       siswaSnap.forEach((d) => allSiswa.push(d.data() as Siswa))
       allSiswa.sort((a, b) => a.kelas.localeCompare(b.kelas) || a.nama.localeCompare(b.nama))
 
-      // Ambil kehadiran di rentang tanggal
+      // Ambil kehadiran untuk kelas target (filter rentang tanggal di sisi klien agar tidak membutuhkan composite index)
       const kehadiranSnap = await getDocs(
         query(
           collection(db, 'kehadiran'),
-          where('kelas', 'in', targetKelas),
-          where('tanggal', '>=', pdfStartDate),
-          where('tanggal', '<=', pdfEndDate)
+          where('kelas', 'in', targetKelas)
         )
       )
 
-      // Rekapitulasi per siswa
+      // Rekapitulasi per siswa dalam rentang tanggal
       const summary: Record<string, { hadir: number; izin: number; sakit: number; alfa: number }> = {}
       kehadiranSnap.forEach((d) => {
         const item = d.data() as Kehadiran
-        if (!summary[item.siswaId]) {
-          summary[item.siswaId] = { hadir: 0, izin: 0, sakit: 0, alfa: 0 }
+        if (item.tanggal >= pdfStartDate && item.tanggal <= pdfEndDate) {
+          if (!summary[item.siswaId]) {
+            summary[item.siswaId] = { hadir: 0, izin: 0, sakit: 0, alfa: 0 }
+          }
+          if (item.status === 'hadir') summary[item.siswaId].hadir++
+          if (item.status === 'izin') summary[item.siswaId].izin++
+          if (item.status === 'sakit') summary[item.siswaId].sakit++
+          if (item.status === 'alfa') summary[item.siswaId].alfa++
         }
-        if (item.status === 'hadir') summary[item.siswaId].hadir++
-        if (item.status === 'izin') summary[item.siswaId].izin++
-        if (item.status === 'sakit') summary[item.siswaId].sakit++
-        if (item.status === 'alfa') summary[item.siswaId].alfa++
       })
 
       // Header PDF
