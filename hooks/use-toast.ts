@@ -9,8 +9,6 @@ export interface ToastProps {
   variant?: 'default' | 'destructive'
 }
 
-type ToastActionElement = React.ReactElement
-
 interface State {
   toasts: ToastProps[]
 }

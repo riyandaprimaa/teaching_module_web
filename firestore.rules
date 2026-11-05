@@ -1,10 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Izinkan read dan write jika user sudah login (autentikasi Firebase)
+    // Hanya admin (1 guru) yang boleh membaca/menulis.
+    // Aplikasi juga memverifikasi token di setiap API route (lib/api-auth.ts).
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null
+        && request.auth.token.email == 'riyandaprima69@gmail.com';
     }
   }
 }
-

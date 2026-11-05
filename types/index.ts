@@ -1,4 +1,7 @@
-export type KelasId = '7A' | '7B' | '8A' | '8B' | '9A'
+export type KelasId =
+  | '7A' | '7B' | '7C' | '7D' | '7E' | '7F' | '7G' | '7H'
+  | '8A' | '8B' | '8C' | '8D' | '8E' | '8F' | '8G' | '8H'
+  | '9A' | '9B' | '9C' | '9D' | '9E' | '9F' | '9G' | '9H'
 
 export type StatusKehadiran = 'hadir' | 'izin' | 'sakit' | 'alfa'
 
@@ -9,7 +12,7 @@ export interface Siswa {
   nis: string
   nama: string
   kelas: KelasId
-  createdAt: Date
+  createdAt: string
 }
 
 export interface Kehadiran {
@@ -19,7 +22,7 @@ export interface Kehadiran {
   kelas: KelasId
   tanggal: string // format: YYYY-MM-DD
   status: StatusKehadiran
-  updatedAt: Date
+  updatedAt: string
 }
 
 export interface RekapKehadiran {
@@ -44,7 +47,7 @@ export interface Nilai {
   materi: string
   nilai: number
   tanggal: string
-  createdAt: Date
+  createdAt: string
 }
 
 export interface Jurnal {
@@ -54,8 +57,8 @@ export interface Jurnal {
   topik: string
   isi: string
   refleksi: string
-  createdAt: Date
-  updatedAt: Date
+  createdAt: string
+  updatedAt?: string
 }
 
 export interface Bab {
@@ -68,7 +71,7 @@ export interface Bab {
   contohSoal: Soal[]
   latihan: Soal[]
   soalHots: Soal[]
-  updatedAt: Date
+  updatedAt: string
 }
 
 export interface Soal {
@@ -80,16 +83,17 @@ export interface Soal {
   jawaban?: string
 }
 
-export const KELAS_LIST: KelasId[] = ['7A', '7B', '8A', '8B', '9A']
+export const ALL_KELAS_LIST: KelasId[] = [
+  '7A', '7B', '7C', '7D', '7E', '7F', '7G', '7H',
+  '8A', '8B', '8C', '8D', '8E', '8F', '8G', '8H',
+  '9A', '9B', '9C', '9D', '9E', '9F', '9G', '9H',
+]
 
-export const KELAS_COLORS: Record<KelasId, string> = {
-  '7A': '#3B82F6',
-  '7B': '#60A5FA',
-  '8A': '#8B5CF6',
-  '8B': '#A78BFA',
-  '9A': '#F59E0B',
-}
+// Default daftar kelas jika user belum setting kelas aktif
+export const DEFAULT_ACTIVE_KELAS: KelasId[] = ['7A', '7B', '8A', '8B', '9A']
 
-export const KKM = 70
+// Alias untuk backwards compatibility
+export const KELAS_LIST = ALL_KELAS_LIST
+
+export const KKM = 75
 export const TAHUN_AJARAN = '2026/2027'
-

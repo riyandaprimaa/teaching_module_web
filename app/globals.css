@@ -1,27 +1,139 @@
 @import "tailwindcss";
 
+/* Dark mode mengikuti class .dark di <html> (bukan prefers-color-scheme OS) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Palet slate dinetralkan ke zinc (abu-abu netral) — dark mode tanpa rona navy/biru */
+@theme {
+  --color-slate-50: #fafafa;
+  --color-slate-100: #f4f4f5;
+  --color-slate-200: #e4e4e7;
+  --color-slate-300: #d4d4d8;
+  --color-slate-400: #a1a1aa;
+  --color-slate-500: #71717a;
+  --color-slate-600: #52525b;
+  --color-slate-700: #3f3f46;
+  --color-slate-800: #26262a;
+  --color-slate-900: #18181b;
+  --color-slate-950: #101012;
+}
+
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #ffffff;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-border: #e4e4e7;
+  /* Tombol utama — pink pastel lembut, teks rose gelap (kontras aman) */
+  --btn-bg: #f9a8d4;
+  --btn-bg-hover: #f472b6;
+  --btn-fg: #881337;
+}
+
+.dark {
+  --background: #18181b;
+  --foreground: #ffffff;
+  --card: #26262a;
+  --card-border: #3f3f46;
+  --btn-bg: #ec4899;
+  --btn-bg-hover: #f472b6;
+  --btn-fg: #500724;
 }
 
 body {
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: var(--background);
+  color: var(--foreground);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-/* Pastikan semua input, select, textarea memiliki kontras teks yang tegas */
+/* Interactivity & Hover Transitions untuk seluruh Button */
+button, a.button-link {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled), a.button-link:hover {
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled), a.button-link:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Tombol utama pastel (terang & gelap) — kelas semantik untuk CTA */
+.btn-primary {
+  background-color: var(--btn-bg);
+  color: var(--btn-fg);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--btn-bg-hover);
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--btn-bg-hover);
+  outline-offset: 2px;
+}
+
+/* Chip terpilih (tab kelas, mode ekspor) — pastel */
+.chip-active {
+  background-color: var(--btn-bg);
+  color: var(--btn-fg);
+}
+
+.chip-active:hover:not(:disabled) {
+  background-color: var(--btn-bg-hover);
+}
+
+/* Input kontras di mode light (hitam) & dark (putih) */
 input, select, textarea {
-  color: #0f172a !important;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-input::placeholder, textarea::placeholder {
-  color: #64748b !important;
-  opacity: 1 !important;
+.dark input, .dark select, .dark textarea {
+  background-color: #18181b !important;
+  color: #ffffff !important;
+  border-color: #3f3f46 !important;
 }
 
-select option {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
+.dark input::placeholder, .dark textarea::placeholder {
+  color: #a1a1aa !important;
+}
+
+.dark select option {
+  background-color: #18181b !important;
+  color: #ffffff !important;
+}
+
+/* Teks berjalan (marquee) — kartu nilai tertinggi/terendah & banner sambutan */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 14s linear infinite;
+}
+
+.animate-marquee-slow {
+  animation: marquee 28s linear infinite;
+}
+
+.animate-marquee:hover, .animate-marquee-slow:hover {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee, .animate-marquee-slow {
+    animation: none;
+  }
 }

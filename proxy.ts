@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Middleware ini hanya melindungi route /dashboard
-// Auth state dicek di client side menggunakan AuthContext
-export function middleware(request: NextRequest) {
+// Proxy ini hanya menangani redirect root ke /dashboard
+// Proteksi data dilakukan server-side di API routes (lib/api-auth.ts)
+// & Firestore Security Rules, bukan di client side.
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Redirect root ke dashboard
@@ -15,6 +16,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/dashboard/:path*'],
+  matcher: ['/'],
 }
-

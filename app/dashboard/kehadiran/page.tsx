@@ -6,25 +6,52 @@ import {
   query,
   where,
   onSnapshot,
-  setDoc,
   doc,
+  writeBatch,
   getDocs,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { Siswa, Kehadiran, KelasId, KELAS_LIST, StatusKehadiran, TAHUN_AJARAN } from '@/types'
+import { useTheme } from '@/contexts/ThemeContext'
+import { Siswa, Kehadiran, KelasId, StatusKehadiran, TAHUN_AJARAN } from '@/types'
 import { formatTanggal, toDateString, getStatusColor, getStatusLabel } from '@/lib/utils'
-import { Calendar, Download, Printer, CheckCircle, RefreshCw, AlertCircle } from 'lucide-react'
+import { fetchWithAuth, parseApiResponse } from '@/lib/api-client'
+import {
+  Calendar,
+  Printer,
+  CheckCircle,
+  RefreshCw,
+  Save,
+  Trash2,
+  CheckSquare,
+  Square,
+} from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { toast } from '@/hooks/use-toast'
+import { DatePicker } from '@/components/ui/date-picker'
 
 export default function KehadiranPage() {
-  const [selectedKelas, setSelectedKelas] = useState<KelasId>('7A')
+  const { activeKelasList, spreadsheetId } = useTheme()
+
+  const [selectedKelas, setSelectedKelas] = useState<KelasId>(activeKelasList[0] || '7A')
   const [selectedTanggal, setSelectedTanggal] = useState<string>(toDateString(new Date()))
   const [siswaList, setSiswaList] = useState<Siswa[]>([])
-  const [kehadiranMap, setKehadiranMap] = useState<Record<string, StatusKehadiran>>({})
   const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
+
+  // Draft lokal sebelum tombol "Simpan Perubahan" ditekan
+  const [draftKehadiran, setDraftKehadiran] = useState<Record<string, StatusKehadiran>>({})
+  const [hasChanges, setHasChanges] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+
+  // State untuk Opsi Seleksi (Select Delete)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  // State Modal Ekspor PDF Rentang Tanggal / Multi-Kelas
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [pdfKelasMode, setPdfKelasMode] = useState<'single' | 'allActive'>('single')
+  const [pdfStartDate, setPdfStartDate] = useState<string>(toDateString(new Date()))
+  const [pdfEndDate, setPdfEndDate] = useState<string>(toDateString(new Date()))
 
   // 1. Ambil daftar siswa kelas terpilih
   useEffect(() => {
@@ -36,12 +63,20 @@ export default function KehadiranPage() {
       data.sort((a, b) => a.nama.localeCompare(b.nama))
       setSiswaList(data)
       setLoading(false)
+      setSelectedIds([])
     })
 
     return () => unsub()
   }, [selectedKelas])
 
-  // 2. Ambil status kehadiran per tanggal & kelas terpilih secara realtime
+  // Pastikan kelas terpilih selalu valid
+  useEffect(() => {
+    if (!activeKelasList.includes(selectedKelas)) {
+      setSelectedKelas(activeKelasList[0] || '7A')
+    }
+  }, [activeKelasList, selectedKelas])
+
+  // 2. Ambil status kehadiran realtime per tanggal & kelas terpilih
   useEffect(() => {
     const q = query(
       collection(db, 'kehadiran'),
@@ -55,168 +90,303 @@ export default function KehadiranPage() {
         const item = doc.data() as Kehadiran
         map[item.siswaId] = item.status
       })
-      setKehadiranMap(map)
+      setDraftKehadiran(map)
+      setHasChanges(false)
     })
 
     return () => unsub()
   }, [selectedKelas, selectedTanggal])
 
-  // 3. Update status kehadiran siswa (Realtime Firestore + sync Sheets)
-  const handleSetStatus = async (siswa: Siswa, status: StatusKehadiran) => {
-    try {
-      const docId = `${selectedTanggal}_${siswa.id}`
-      await setDoc(doc(db, 'kehadiran', docId), {
-        id: docId,
-        siswaId: siswa.id,
-        namaSiswa: siswa.nama,
-        kelas: selectedKelas,
-        tanggal: selectedTanggal,
-        status: status,
-        updatedAt: new Date().toISOString(),
-      })
-
-      // Kirim sinkronisasi ke Google Sheets API di background
-      fetch('/api/sync-kehadiran', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nis: siswa.nis,
-          nama: siswa.nama,
-          kelas: selectedKelas,
-          tanggal: selectedTanggal,
-          status: getStatusLabel(status),
-        }),
-      }).catch((err) => console.error('Background sheet sync failed', err))
-
-      toast({
-        title: 'Presensi Dicatat',
-        description: `${siswa.nama} ditandai ${getStatusLabel(status)}.`,
-      })
-    } catch (error: any) {
-      toast({
-        title: 'Gagal Menyimpan',
-        description: error.message,
-        variant: 'destructive',
-      })
-    }
+  // Ubah status di DRAFT lokal (belum langsung ke Firestore)
+  const handleChangeStatusLocal = (siswaId: string, status: StatusKehadiran) => {
+    setDraftKehadiran((prev) => ({
+      ...prev,
+      [siswaId]: status,
+    }))
+    setHasChanges(true)
   }
 
-  // Tandai semua hadir sekaligus
-  const handleMarkAllHadir = async () => {
-    setSyncing(true)
+  // Tandai semua hadir di draft
+  const handleMarkAllHadirDraft = () => {
+    const nextDraft = { ...draftKehadiran }
+    siswaList.forEach((s) => {
+      nextDraft[s.id] = 'hadir'
+    })
+    setDraftKehadiran(nextDraft)
+    setHasChanges(true)
+  }
+
+  // Simpan Perubahan ke Database Firestore & Sync ke Spreadsheet jika tombol ditekan
+  const handleSaveAllChanges = async () => {
+    setIsSaving(true)
     try {
+      const batch = writeBatch(db)
+      const rowsToSync: {
+        nis: string
+        nama: string
+        kelas: KelasId
+        tanggal: string
+        status: string
+      }[] = []
+
       for (const siswa of siswaList) {
-        const docId = `${selectedTanggal}_${siswa.id}`
-        await setDoc(doc(db, 'kehadiran', docId), {
-          id: docId,
-          siswaId: siswa.id,
-          namaSiswa: siswa.nama,
-          kelas: selectedKelas,
-          tanggal: selectedTanggal,
-          status: 'hadir',
-          updatedAt: new Date().toISOString(),
-        })
+        const status = draftKehadiran[siswa.id]
+        if (status) {
+          const docId = `${selectedTanggal}_${siswa.id}`
+          const docRef = doc(db, 'kehadiran', docId)
+          batch.set(docRef, {
+            id: docId,
+            siswaId: siswa.id,
+            namaSiswa: siswa.nama,
+            kelas: selectedKelas,
+            tanggal: selectedTanggal,
+            status: status,
+            updatedAt: new Date().toISOString(),
+          })
+
+          rowsToSync.push({
+            nis: siswa.nis,
+            nama: siswa.nama,
+            kelas: selectedKelas,
+            tanggal: selectedTanggal,
+            status: getStatusLabel(status),
+          })
+        }
       }
+
+      await batch.commit()
+
+      // Sinkron batch ke Sheets (1 request, dikirim setelah Firestore sukses;
+      // error Sheets tidak membatalkan penyimpanan presensi)
+      if (rowsToSync.length > 0) {
+        fetchWithAuth('/api/sync-kehadiran', {
+          method: 'POST',
+          body: JSON.stringify({ rows: rowsToSync, spreadsheetId: spreadsheetId || undefined }),
+        })
+          .then((res) => parseApiResponse(res))
+          .catch((e) => console.warn('Sinkronisasi Sheets gagal:', e.message))
+      }
+
+      setHasChanges(false)
       toast({
-        title: 'Semua Hadir',
-        description: `Seluruh siswa kelas ${selectedKelas} berhasil ditandai Hadir.`,
+        title: 'Perubahan Disimpan! ✓',
+        description: `Presensi kelas ${selectedKelas} (${formatTanggal(selectedTanggal)}) telah tersimpan.`,
       })
-    } catch (err: any) {
-      toast({ title: 'Gagal', description: err.message, variant: 'destructive' })
+    } catch (err: unknown) {
+      toast({ title: 'Gagal Menyimpan', description: err instanceof Error ? err.message : 'Terjadi kesalahan', variant: 'destructive' })
     } finally {
-      setSyncing(false)
+      setIsSaving(false)
     }
   }
 
-  // 4. Export Rekap PDF Siap Cetak
-  const handleExportPDF = async () => {
-    const doc = new jsPDF()
+  // Toggle selection untuk select delete
+  const handleToggleSelectOne = (siswaId: string) => {
+    if (selectedIds.includes(siswaId)) {
+      setSelectedIds(selectedIds.filter((id) => id !== siswaId))
+    } else {
+      setSelectedIds([...selectedIds, siswaId])
+    }
+  }
 
-    // Header Laporan
-    doc.setFontSize(16)
-    doc.text('REKAPITULASI KEHADIRAN SISWA SMP', 105, 18, { align: 'center' })
-    doc.setFontSize(10)
-    doc.text(`Kelas: ${selectedKelas} | Tanggal: ${selectedTanggal} | T.A: ${TAHUN_AJARAN}`, 105, 25, {
-      align: 'center',
-    })
-    doc.setLineWidth(0.5)
-    doc.line(14, 28, 196, 28)
+  const handleToggleSelectAll = () => {
+    if (selectedIds.length === siswaList.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(siswaList.map((s) => s.id))
+    }
+  }
 
-    // Data Tabel
-    const tableData = siswaList.map((s, index) => {
-      const status = kehadiranMap[s.id]
-      return [
-        index + 1,
-        s.nis,
-        s.nama,
-        selectedKelas,
-        status ? getStatusLabel(status) : 'Belum Diabsen',
-      ]
-    })
+  // Hapus Data Presensi yang Dipilih
+  const handleDeleteSelectedAttendance = async () => {
+    if (selectedIds.length === 0) return
+    if (!confirm(`Hapus data presensi untuk ${selectedIds.length} siswa terpilih pada tanggal ${selectedTanggal}?`)) return
 
-    autoTable(doc, {
-      startY: 32,
-      head: [['No', 'NIS', 'Nama Siswa', 'Kelas', 'Keterangan Presensi']],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [30, 58, 95] },
-      styles: { fontSize: 9 },
-    })
+    setIsDeleting(true)
+    try {
+      const batch = writeBatch(db)
+      selectedIds.forEach((siswaId) => {
+        const docId = `${selectedTanggal}_${siswaId}`
+        batch.delete(doc(db, 'kehadiran', docId))
+      })
+      await batch.commit()
+      setSelectedIds([])
+      toast({ title: 'Presensi Dihapus', description: 'Data terpilih telah dibersihkan.' })
+    } catch (err: unknown) {
+      toast({ title: 'Gagal Menghapus', description: err instanceof Error ? err.message : 'Terjadi kesalahan', variant: 'destructive' })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
-    // Tanda Tangan Guru
-    const finalY = (doc as any).lastAutoTable.finalY + 15
-    doc.setFontSize(10)
-    doc.text('Mengetahui,', 145, finalY)
-    doc.text('Guru Mata Pelajaran Matematika', 145, finalY + 6)
-    doc.text('( ................................................ )', 145, finalY + 28)
+  // Hapus Semua Presensi di Tanggal & Kelas Ini
+  const handleDeleteAllAttendanceToday = async () => {
+    if (!confirm(`Hapus SELURUH data presensi kelas ${selectedKelas} pada tanggal ${selectedTanggal}?`)) return
 
-    doc.save(`Presensi_${selectedKelas}_${selectedTanggal}.pdf`)
+    setIsDeleting(true)
+    try {
+      const batch = writeBatch(db)
+      siswaList.forEach((s) => {
+        const docId = `${selectedTanggal}_${s.id}`
+        batch.delete(doc(db, 'kehadiran', docId))
+      })
+      await batch.commit()
+      setSelectedIds([])
+      toast({ title: 'Presensi Dikosongkan' })
+    } catch (err: unknown) {
+      toast({ title: 'Gagal', description: err instanceof Error ? err.message : 'Terjadi kesalahan', variant: 'destructive' })
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  // Export Rekap PDF (Mendukung Rentang Tanggal & Pilihan Kelas Tunggal/Gabungan)
+  const handleGeneratePdfReport = async () => {
+    try {
+      toast({ title: 'Menyiapkan Rekap PDF...' })
+      const doc = new jsPDF()
+
+      const targetKelas = pdfKelasMode === 'single' ? [selectedKelas] : activeKelasList
+
+      // Ambil data siswa untuk kelas target
+      const siswaSnap = await getDocs(
+        query(collection(db, 'siswa'), where('kelas', 'in', targetKelas))
+      )
+      const allSiswa: Siswa[] = []
+      siswaSnap.forEach((d) => allSiswa.push(d.data() as Siswa))
+      allSiswa.sort((a, b) => a.kelas.localeCompare(b.kelas) || a.nama.localeCompare(b.nama))
+
+      // Ambil kehadiran di rentang tanggal
+      const kehadiranSnap = await getDocs(
+        query(
+          collection(db, 'kehadiran'),
+          where('kelas', 'in', targetKelas),
+          where('tanggal', '>=', pdfStartDate),
+          where('tanggal', '<=', pdfEndDate)
+        )
+      )
+
+      // Rekapitulasi per siswa
+      const summary: Record<string, { hadir: number; izin: number; sakit: number; alfa: number }> = {}
+      kehadiranSnap.forEach((d) => {
+        const item = d.data() as Kehadiran
+        if (!summary[item.siswaId]) {
+          summary[item.siswaId] = { hadir: 0, izin: 0, sakit: 0, alfa: 0 }
+        }
+        if (item.status === 'hadir') summary[item.siswaId].hadir++
+        if (item.status === 'izin') summary[item.siswaId].izin++
+        if (item.status === 'sakit') summary[item.siswaId].sakit++
+        if (item.status === 'alfa') summary[item.siswaId].alfa++
+      })
+
+      // Header PDF
+      doc.setFontSize(15)
+      doc.text('REKAPITULASI PRESENSI SISWA MATEMATIKA SMP', 105, 18, { align: 'center' })
+      doc.setFontSize(10)
+      const kelasText = pdfKelasMode === 'single' ? `Kelas: ${selectedKelas}` : `Gabungan Kelas: ${targetKelas.join(', ')}`
+      const rentangText = pdfStartDate === pdfEndDate ? `Tanggal: ${pdfStartDate}` : `Periode: ${pdfStartDate} s/d ${pdfEndDate}`
+      doc.text(`${kelasText} | ${rentangText} | T.A: ${TAHUN_AJARAN}`, 105, 25, { align: 'center' })
+      doc.setLineWidth(0.5)
+      doc.line(14, 28, 196, 28)
+
+      const tableData = allSiswa.map((s, idx) => {
+        const st = summary[s.id] || { hadir: 0, izin: 0, sakit: 0, alfa: 0 }
+        return [
+          idx + 1,
+          s.nis,
+          s.nama,
+          s.kelas,
+          st.hadir,
+          st.izin,
+          st.sakit,
+          st.alfa,
+        ]
+      })
+
+      autoTable(doc, {
+        startY: 32,
+        head: [['No', 'NIS', 'Nama Siswa', 'Kelas', 'Hadir', 'Izin', 'Sakit', 'Alfa']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [190, 24, 93] }, // Pink Dark
+        styles: { fontSize: 8 },
+      })
+
+      const docWithTable = doc as unknown as { lastAutoTable?: { finalY: number } }
+      const finalY = (docWithTable.lastAutoTable?.finalY ?? 0) + 15
+      doc.setFontSize(9)
+      doc.text('Mengetahui,', 145, finalY)
+      doc.text('Guru Mata Pelajaran Matematika', 145, finalY + 5)
+      doc.text('( ................................................ )', 145, finalY + 25)
+
+      doc.save(`Rekap_Presensi_${pdfKelasMode === 'single' ? selectedKelas : 'Gabungan'}_${pdfStartDate}_${pdfEndDate}.pdf`)
+      setShowExportModal(false)
+      toast({ title: 'PDF Berhasil Dibuat! 📄' })
+    } catch (err: unknown) {
+      toast({ title: 'Gagal Generate PDF', description: err instanceof Error ? err.message : 'Terjadi kesalahan', variant: 'destructive' })
+    }
   }
 
   return (
     <div className="space-y-6">
       {/* Header Halaman */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-xl border border-slate-200">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-[#27272a] p-5 rounded-2xl border-2 border-pink-300 dark:border-[1px] dark:border-slate-700 shadow-xs">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Daftar Kehadiran Siswa</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Presensi realtime terhubung langsung ke Firebase & Google Spreadsheet.
+          <h1 className="text-xl font-black text-slate-900 dark:text-white">Daftar Kehadiran Siswa</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Lakukan absensi kelas, review perubahan, dan tekan tombol Simpan Perubahan agar tersimpan permanen.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Tombol Simpan Perubahan Utama */}
           <button
-            onClick={handleMarkAllHadir}
-            disabled={syncing || siswaList.length === 0}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-sm"
+            onClick={handleSaveAllChanges}
+            disabled={!hasChanges || isSaving}
+            className={`flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-xl shadow-xs transition ${
+              hasChanges
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white animate-pulse'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500'
+            }`}
           >
-            <CheckCircle className="w-4 h-4" /> Tandai Semua Hadir
+            <Save className="w-4 h-4" />
+            {isSaving ? 'Menyimpan...' : hasChanges ? 'Simpan Perubahan *' : 'Tersimpan'}
           </button>
 
+          {/* Tandai Semua Hadir */}
           <button
-            onClick={handleExportPDF}
+            onClick={handleMarkAllHadirDraft}
             disabled={siswaList.length === 0}
-            className="flex items-center gap-1.5 bg-[#1E3A5F] hover:bg-slate-800 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-sm"
+            className="flex items-center gap-1.5 bg-white dark:bg-[#27272a] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold px-3 py-2 rounded-xl border-[1.5px] border-slate-300 dark:border-[1px] dark:border-slate-700"
           >
-            <Printer className="w-4 h-4" /> Cetak / Export Rekap PDF
+            <CheckCircle className="w-3.5 h-3.5 text-pink-600" />
+            Semua Hadir
+          </button>
+
+          {/* Buka Dialog Ekspor PDF */}
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-1.5 btn-primary text-xs font-bold px-3.5 py-2 rounded-xl shadow-xs"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            Cetak Rekap PDF
           </button>
         </div>
       </div>
 
-      {/* Filter Kontrol Bar */}
-      <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-xl border border-slate-200">
-        {/* Pilihan Kelas */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-slate-600">Pilih Kelas:</span>
-          <div className="flex gap-1.5">
-            {KELAS_LIST.map((k) => (
+      {/* Bar Filter Kelas Aktif & Tanggal */}
+      <div className="flex flex-wrap gap-4 items-center justify-between bg-white dark:bg-[#27272a] p-4 rounded-2xl border-2 border-pink-300 dark:border-[1px] dark:border-slate-700">
+        {/* Pilihan Kelas Aktif */}
+        <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0">
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">Pilih Kelas:</span>
+          <div className="flex gap-1.5 flex-nowrap">
+            {activeKelasList.map((k) => (
               <button
                 key={k}
                 onClick={() => setSelectedKelas(k)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition ${
                   selectedKelas === k
-                    ? 'bg-[#1E3A5F] text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    ? 'chip-active shadow-xs'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-[1.5px] border-slate-300 dark:border-[1px] dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
               >
                 {k}
@@ -226,60 +396,112 @@ export default function KehadiranPage() {
         </div>
 
         {/* Pemilih Tanggal */}
-        <div className="flex items-center gap-2 ml-auto">
-          <Calendar className="w-4 h-4 text-slate-600" />
-          <span className="text-xs font-semibold text-slate-700">Tanggal:</span>
-          <input
-            type="date"
-            value={selectedTanggal}
-            onChange={(e) => setSelectedTanggal(e.target.value)}
-            className="border border-slate-300 rounded-lg text-xs px-3 py-2 bg-white text-slate-900 font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-          />
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-pink-500" />
+          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Tanggal:</span>
+          <DatePicker value={selectedTanggal} onChange={setSelectedTanggal} />
         </div>
       </div>
 
-      {/* Tabel Kehadiran */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-          <div className="text-xs font-semibold text-slate-700">
-            Daftar Siswa Kelas {selectedKelas} • {formatTanggal(selectedTanggal)}
+      {/* Tabel Kehadiran Siswa */}
+      <div className="bg-white dark:bg-[#27272a] rounded-2xl border-2 border-pink-300 dark:border-[1px] dark:border-slate-700 overflow-hidden shadow-xs">
+        {/* Bar Sub-Aksi (Pilih Delete & Status Bar) */}
+        <div className="p-4 border-b-[1.5px] border-slate-300 dark:border-b-[1px] dark:border-slate-700 flex flex-wrap justify-between items-center gap-3 bg-white dark:bg-slate-800/60">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleToggleSelectAll}
+              className="flex items-center gap-1.5 text-xs font-bold text-pink-700 dark:text-pink-300 hover:opacity-70 transition"
+            >
+              {selectedIds.length === siswaList.length && siswaList.length > 0 ? (
+                <CheckSquare className="w-4 h-4 text-pink-600" />
+              ) : (
+                <Square className="w-4 h-4 text-pink-400" />
+              )}
+              Pilih ({selectedIds.length}/{siswaList.length})
+            </button>
+
+            {selectedIds.length > 0 && (
+              <button
+                onClick={handleDeleteSelectedAttendance}
+                disabled={isDeleting}
+                className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Hapus Presensi Terpilih ({selectedIds.length})
+              </button>
+            )}
           </div>
-          <span className="text-xs font-medium text-slate-500">
-            Total: {siswaList.length} Siswa
-          </span>
+
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Kelas {selectedKelas} • {formatTanggal(selectedTanggal)}
+            </span>
+
+            {siswaList.length > 0 && (
+              <button
+                onClick={handleDeleteAllAttendanceToday}
+                disabled={isDeleting}
+                className="flex items-center gap-1 text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-50 dark:bg-red-950/30 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-900/40"
+              >
+                <Trash2 className="w-3 h-3" /> Hapus Presensi Hari Ini
+              </button>
+            )}
+          </div>
         </div>
 
         {loading ? (
-          <div className="p-12 text-center text-slate-400 text-sm">
-            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#0D9488]" />
+          <div className="p-12 text-center text-slate-400 dark:text-slate-500 text-xs">
+            <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-pink-500" />
             Memuat data siswa kelas {selectedKelas}...
           </div>
         ) : siswaList.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 text-sm">
-            Belum ada data siswa di kelas {selectedKelas}.
-            <br />
-            Silakan klik "Generate Data Awal Siswa" di halaman Beranda.
+          <div className="p-12 text-center text-slate-400 dark:text-slate-500 text-xs">
+            Tidak ada siswa terdaftar di kelas {selectedKelas}.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-semibold">
+              <thead className="bg-white dark:bg-slate-800/60 border-b-[1.5px] border-slate-300 dark:border-b-[1px] dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-black tracking-wider">
                 <tr>
+                  <th className="py-3 px-4 w-10 text-center">Pilih</th>
                   <th className="py-3 px-4 w-12 text-center">No</th>
                   <th className="py-3 px-4 w-28">NIS</th>
                   <th className="py-3 px-4">Nama Lengkap Siswa</th>
-                  <th className="py-3 px-4 w-32 text-center">Status Saat Ini</th>
-                  <th className="py-3 px-4 text-center w-64">Aksi Presensi Cepat</th>
+                  <th className="py-3 px-4 w-32 text-center">Status Presensi</th>
+                  <th className="py-3 px-4 text-center w-64">Aksi Cepat</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {siswaList.map((siswa, index) => {
-                  const currentStatus = kehadiranMap[siswa.id]
+              <tbody className="divide-y-[1.5px] divide-slate-200 dark:divide-y-[1px] dark:divide-slate-700/60">
+                {siswaList.map((siswa, idx) => {
+                  const isChecked = selectedIds.includes(siswa.id)
+                  const currentStatus = draftKehadiran[siswa.id]
                   return (
-                    <tr key={siswa.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 text-center text-slate-400 font-medium">{index + 1}</td>
-                      <td className="py-3 px-4 font-mono font-medium text-slate-600">{siswa.nis}</td>
-                      <td className="py-3 px-4 font-semibold text-slate-800">{siswa.nama}</td>
+                    <tr
+                      key={siswa.id}
+                      className={`transition-colors ${
+                        isChecked
+                          ? 'bg-pink-100/50 dark:bg-pink-950/50'
+                          : 'hover:bg-pink-50/60 dark:hover:bg-slate-800/40'
+                      }`}
+                    >
+                      <td className="py-3 px-4 text-center">
+                        <button onClick={() => handleToggleSelectOne(siswa.id)} className="transition hover:opacity-70">
+                          {isChecked ? (
+                            <CheckSquare className="w-4 h-4 text-pink-600" />
+                          ) : (
+                            <Square className="w-4 h-4 text-pink-300 dark:text-pink-700" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="py-3 px-4 text-center text-slate-400 dark:text-slate-500 font-semibold">
+                        {idx + 1}
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-slate-900 dark:text-white">
+                        {siswa.nis}
+                      </td>
+                      <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">
+                        {siswa.nama}
+                      </td>
                       <td className="py-3 px-4 text-center">
                         {currentStatus ? (
                           <span
@@ -294,21 +516,21 @@ export default function KehadiranPage() {
                         )}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <div className="inline-flex gap-1.5 bg-slate-100 p-1 rounded-lg">
+                        <div className="inline-flex gap-1.5 bg-white dark:bg-slate-800/60 p-1 rounded-xl border-[1.5px] border-slate-300 dark:border-[1px] dark:border-slate-700">
                           {(['hadir', 'izin', 'sakit', 'alfa'] as StatusKehadiran[]).map((st) => (
                             <button
                               key={st}
-                              onClick={() => handleSetStatus(siswa, st)}
-                              className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase transition ${
+                              onClick={() => handleChangeStatusLocal(siswa.id, st)}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition ${
                                 currentStatus === st
                                   ? st === 'hadir'
-                                    ? 'bg-green-600 text-white'
+                                    ? 'bg-emerald-600 text-white shadow-xs'
                                     : st === 'izin'
-                                    ? 'bg-blue-600 text-white'
+                                    ? 'bg-blue-600 text-white shadow-xs'
                                     : st === 'sakit'
-                                    ? 'bg-amber-600 text-white'
-                                    : 'bg-red-600 text-white'
-                                  : 'text-slate-600 hover:bg-white'
+                                    ? 'bg-amber-600 text-white shadow-xs'
+                                    : 'bg-red-600 text-white shadow-xs'
+                                  : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700'
                               }`}
                             >
                               {st}
@@ -324,7 +546,84 @@ export default function KehadiranPage() {
           </div>
         )}
       </div>
+
+      {/* Modal Filter Ekspor PDF (Rentang Tanggal & Pilihan Kelas) */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#27272a] rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border-2 border-pink-300 dark:border-[1px] dark:border-slate-700">
+            <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+              <Printer className="w-4 h-4 text-pink-600" /> Ekspor Rekap Presensi PDF
+            </h3>
+
+            <div className="space-y-3.5 text-xs">
+              {/* Opsi Target Kelas */}
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1.5">
+                  Cakupan Kelas
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setPdfKelasMode('single')}
+                    className={`py-2 px-3 rounded-xl font-bold border transition ${
+                      pdfKelasMode === 'single'
+                        ? 'chip-active border-pink-300 dark:border-pink-500'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                    }`}
+                  >
+                    Kelas Ini Saja ({selectedKelas})
+                  </button>
+                  <button
+                    onClick={() => setPdfKelasMode('allActive')}
+                    className={`py-2 px-3 rounded-xl font-bold border transition ${
+                      pdfKelasMode === 'allActive'
+                        ? 'chip-active border-pink-300 dark:border-pink-500'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                    }`}
+                  >
+                    Gabungan {activeKelasList.length} Kelas Aktif
+                  </button>
+                </div>
+              </div>
+
+              {/* Rentang Tanggal */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">
+                    Dari Tanggal
+                  </label>
+                  <DatePicker value={pdfStartDate} onChange={setPdfStartDate} className="w-full" />
+                </div>
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-bold mb-1">
+                    Hingga Tanggal
+                  </label>
+                  <DatePicker value={pdfEndDate} onChange={setPdfEndDate} className="w-full" />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 italic">
+                * PDF akan memuat akumulasi jumlah Hadir, Izin, Sakit, dan Alfa masing-masing siswa pada rentang tersebut.
+              </p>
+
+              <div className="flex justify-end gap-2 pt-3 border-t-[1.5px] border-slate-300 dark:border-t-[1px] dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setShowExportModal(false)}
+                  className="px-3.5 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl font-bold"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleGeneratePdfReport}
+                  className="px-4 py-2 btn-primary font-bold rounded-xl shadow-xs"
+                >
+                  Unduh Dokumen PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-

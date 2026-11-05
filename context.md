@@ -12,7 +12,7 @@
 | **Nama Proyek** | Web Modul Belajar Matematika SMP |
 | **Tujuan** | Platform pedoman guru untuk menyusun modul belajar & mengelola administrasi kelas |
 | **Target Pengguna** | 1 Admin/Guru utama |
-| **Skala** | 5 kelas, ±156 siswa total |
+| **Skala** | Hingga 24 kelas (7A–7H, 8A–8H, 9A–9H), kelas aktif dikustomisasi user |
 | **Repo GitHub** | https://github.com/riyandaprimaa/teaching_module_web.git |
 | **Local Path** | `d:\bby\web_module` |
 | **Bahasa UI** | Bahasa Indonesia |
@@ -24,14 +24,14 @@
 
 | Layer | Teknologi |
 |---|---|
-| Framework | Next.js 14 (App Router) |
-| Styling | Tailwind CSS + shadcn/ui |
+| Framework | Next.js 16 (App Router, konvensi `proxy.ts` — middleware deprecated) |
+| Styling | Tailwind CSS + kelas semantik pastel (`.btn-primary`, `.chip-active`) |
 | Math Render | KaTeX |
 | Database | Firebase Firestore (free tier) |
 | Auth | Firebase Authentication (Google Sign-in) |
-| Spreadsheet | Google Sheets API v4 — **sheet baru dibuat otomatis oleh sistem** |
-| State | Zustand |
-| Form | React Hook Form + Zod |
+| Spreadsheet | Google Sheets API v4 — **ID spreadsheet dimiliki klien (localStorage)**; sinkron UPSERT, tidak ada auto-create sheet |
+| State | React hooks + `contexts/ThemeContext.tsx` (tema, spreadsheetId, kelas aktif) |
+| Form | ~~React Hook Form~~ (uninstall); zod untuk validasi payload API |
 | Charts | Recharts |
 | Hosting | Vercel (free tier) |
 
@@ -39,8 +39,12 @@
 
 ## Keputusan Arsitektur (Sudah Dikunci)
 
-- **Auth**: Hanya 1 user (admin/guru). Login via Google melalui Firebase Auth.
-- **Google Sheets**: Sheet baru dibuat otomatis oleh sistem saat setup pertama. Tidak menggunakan sheet existing.
+- **Auth**: Hanya 1 user (admin/guru). Login via Google melalui Firebase Auth. Email admin: `ADMIN_EMAIL` di env (`riyandaprima69@gmail.com`) — dipakai allowlist API routes & Firestore Rules.
+- **API Security**: Semua API routes memverifikasi Firebase ID Token server-side (`lib/api-auth.ts`). Client memanggil API via `fetchWithAuth` (`lib/api-client.ts`).
+- **Google Sheets**: Tidak ada auto-create spreadsheet. User memasukkan ID spreadsheet di beranda (disimpan di localStorage → `ThemeContext`); semua route sync menerima `spreadsheetId` dari request (fallback env). Sinkronisasi berupa UPSERT (anti-duplikat); tombol "Refresh Spreadsheet" menjalankan sync penuh dari server.
+- **Kelas**: 24 kelas (7A–7H, 8A–8H, 9A–9H); user hanya mengajar sebagian → **filter kelas aktif** (default 5 kelas) disimpan di localStorage, diatur di menu Data Siswa.
+- **KKM**: **75**.
+- **Penyimpanan perubahan**: input di halaman kehadiran/nilai bersifat draft lokal — data baru tersinkron ke Firestore/Sheets setelah tombol **Simpan Perubahan** ditekan.
 - **Firestore**: Data kehadiran, nilai, jurnal, dan materi disimpan di Firestore. Sheets berfungsi sebagai backup & laporan.
 - **Role**: Tidak ada multi-role. Semua fitur hanya bisa diakses oleh admin yang login.
 
@@ -49,13 +53,13 @@
 ## Struktur Data Kelas
 
 ```
-Kelas 7A, 7B
-Kelas 8A, 8B
-Kelas 9A
-Total: 5 kelas, 156 siswa
+Kelas 7A – 7H  (8 kelas)
+Kelas 8A – 8H  (8 kelas)
+Kelas 9A – 9H  (8 kelas)
+Total: 24 kelas
 ```
 
-> Distribusi siswa per kelas belum dikonfirmasi. Asumsi ±30-32 siswa/kelas.
+> User tidak mengajar semua kelas. Sistem menyimpan **daftar kelas aktif** (default 5 kelas) di localStorage — hanya kelas aktif yang tampil sebagai tab di menu kehadiran/nilai/jurnal. Kelas aktif ditambah/dikurangi di menu **Data Siswa → Pilih Kelas Aktif**.
 
 ---
 
@@ -64,35 +68,35 @@ Total: 5 kelas, 156 siswa
 ```
 d:\bby\web_module/
 ├── app/
-│   ├── (auth)/login/page.tsx
+│   ├── page.tsx               ← redirect ke /login
+│   ├── login/page.tsx
 │   ├── dashboard/
-│   │   ├── page.tsx
+│   │   ├── page.tsx           ← beranda (integrasi spreadsheet, statistik)
+│   │   ├── siswa/page.tsx     ← data siswa + filter kelas aktif
 │   │   ├── kehadiran/page.tsx
 │   │   ├── nilai/page.tsx
 │   │   ├── jurnal/page.tsx
-│   │   └── buku/
-│   │       ├── kelas-7/page.tsx
-│   │       ├── kelas-8/page.tsx
-│   │       └── kelas-9/page.tsx
-│   ├── layout.tsx
-│   └── globals.css
+│   │   └── buku/[kelas]/page.tsx
+│   ├── api/
+│   │   ├── seed-siswa/  setup-sheet/
+│   │   ├── sync-kehadiran/  sync-nilai/  sync-all/
+│   ├── layout.tsx             ← + script anti-FOUC tema
+│   └── globals.css            ← palet pastel + .btn-primary/.chip-active
 ├── components/
-│   ├── ui/                    ← shadcn/ui components
-│   ├── kehadiran/
-│   ├── nilai/
-│   ├── jurnal/
-│   └── buku/
+│   ├── ui/                    ← toaster
+│   └── layout/                ← Navbar (toggle tema), Sidebar
+├── contexts/
+│   ├── AuthContext.tsx
+│   └── ThemeContext.tsx       ← tema, spreadsheetId, kelas aktif (localStorage)
 ├── lib/
-│   ├── firebase.ts
-│   ├── sheets.ts
+│   ├── firebase.ts  firebase-admin.ts
+│   ├── sheets.ts  api-auth.ts  api-client.ts
 │   └── utils.ts
-├── hooks/
-│   ├── useKehadiran.ts
-│   ├── useNilai.ts
-│   └── useJurnal.ts
-├── store/                     ← Zustand stores
-├── types/
-├── public/
+├── hooks/use-toast.ts
+├── types/index.ts             ← 24 KelasId, KKM=75
+├── proxy.ts                   ← konvensi Next 16 (pengganti middleware)
+├── firestore.rules
+├── .env.example
 ├── context.md                 ← (file ini)
 ├── spec.md
 └── PRD_WebModulMatematikaSMP.md

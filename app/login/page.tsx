@@ -3,11 +3,13 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { BookOpen, Loader2 } from 'lucide-react'
+import { useTheme } from '@/contexts/ThemeContext'
+import { BookOpen, Loader2, Sun, Moon } from 'lucide-react'
 import { TAHUN_AJARAN } from '@/types'
 
 export default function LoginPage() {
   const { user, loading, signInWithGoogle } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const router = useRouter()
 
   useEffect(() => {
@@ -16,43 +18,63 @@ export default function LoginPage() {
     }
   }, [user, loading, router])
 
+  // Tombol toggle tema — ikut tersedia saat loading & setelahnya
+  const themeToggle = (
+    <button
+      onClick={toggleTheme}
+      title={theme === 'light' ? 'Beralih ke Mode Gelap' : 'Beralih ke Mode Terang'}
+      className="fixed top-4 right-4 z-50 p-2 rounded-xl text-pink-700 dark:text-pink-300 bg-pink-50 dark:bg-pink-500/10 hover:bg-pink-100 dark:hover:bg-pink-500/20 border border-pink-200/70 dark:border-pink-500/20 transition-all shadow-xs"
+    >
+      {theme === 'light' ? (
+        <Moon className="h-4 w-4 text-pink-600" />
+      ) : (
+        <Sun className="h-4 w-4 text-amber-300" />
+      )}
+    </button>
+  )
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-      </div>
+      <>
+        {themeToggle}
+        <div className="min-h-screen flex items-center justify-center bg-white dark:bg-[#18181b]">
+          <Loader2 className="h-8 w-8 animate-spin text-pink-400 dark:text-pink-500" />
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1E3A5F] to-[#0D9488] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md text-center">
+    <>
+      {themeToggle}
+      <div className="min-h-screen bg-white dark:bg-[#18181b] flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-[#27272a] rounded-2xl shadow-2xl p-8 w-full max-w-md text-center border-2 border-pink-300 dark:border-[1px] dark:border-slate-700">
         {/* Icon */}
         <div className="flex justify-center mb-6">
-          <div className="bg-[#1E3A5F] rounded-2xl p-4">
-            <BookOpen className="h-10 w-10 text-white" />
+          <div className="bg-pink-100 dark:bg-pink-500/10 border border-pink-200 dark:border-pink-500/20 rounded-2xl p-4">
+            <BookOpen className="h-10 w-10 text-pink-600 dark:text-pink-300" />
           </div>
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-[#1E3A5F] mb-1">
-          Portal Matematika SMP
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">
+          Jurnal Guru Premium
         </h1>
-        <p className="text-slate-500 text-sm mb-8">
+        <p className="text-slate-500 dark:text-slate-400 text-sm mb-8">
           Tahun Ajaran {TAHUN_AJARAN}
         </p>
 
         {/* Divider */}
-        <div className="border-t border-slate-100 mb-8" />
+        <div className="border-t-[1.5px] border-slate-300 dark:border-t-[1px] dark:border-slate-700 mb-8" />
 
-        <p className="text-slate-600 mb-6 text-sm">
+        <p className="text-slate-600 dark:text-slate-300 mb-6 text-sm">
           Masuk menggunakan akun Google Anda untuk mengakses dashboard
         </p>
 
         {/* Login Button */}
         <button
           onClick={signInWithGoogle}
-          className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-200 rounded-xl py-3 px-4 text-slate-700 font-medium hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 shadow-sm"
+          className="w-full flex items-center justify-center gap-3 btn-primary rounded-xl py-3 px-4 font-bold shadow-sm"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -63,11 +85,11 @@ export default function LoginPage() {
           Masuk dengan Google
         </button>
 
-        <p className="text-slate-400 text-xs mt-6">
+        <p className="text-slate-400 dark:text-slate-500 text-xs mt-6">
           Hanya akun yang berwenang yang dapat mengakses portal ini
         </p>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
-

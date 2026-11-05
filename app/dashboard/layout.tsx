@@ -23,10 +23,10 @@ export default function DashboardLayout({
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-[#18181b]">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-[#1E3A5F] mx-auto mb-3" />
-          <p className="text-slate-500 text-sm">Memuat portal...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-pink-400 dark:text-pink-500 mx-auto mb-3" />
+          <p className="text-slate-600 dark:text-slate-300 text-sm">Memuat portal...</p>
         </div>
       </div>
     )
@@ -35,7 +35,7 @@ export default function DashboardLayout({
   if (!user) return null
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-white dark:bg-[#18181b]">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar />
